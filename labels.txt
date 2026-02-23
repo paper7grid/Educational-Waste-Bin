@@ -1,0 +1,4 @@
+0 Banana
+1 Used paperplate
+2 Orange Peel
+3 CardboardBox
