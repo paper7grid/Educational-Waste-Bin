@@ -7,7 +7,7 @@ import sys
 import select
 
 # Config
-LED_COUNT = 60
+LED_COUNT = 180
 LED_PIN = 18
 LED_BRIGHTNESS = 190
 
@@ -41,16 +41,16 @@ def wait_or_enter(seconds):
 print("Starting LED sequence...")
 
 # Zone 1: 0–19 GREEN
-light_range(0, 20, GREEN)
+light_range(0, 60, GREEN)
 wait_or_enter(3)
 
 # Zone 2: 20–39 BLUE
-light_range(20, 40, BLUE)
+light_range(61, 120, BLUE)
 wait_or_enter(3)
 
 # Zone 3: 40–59 WHITE
-light_range(40, 60, WHITE)
-wait_or_enter(3)
+light_range(121, 180, WHITE)
+wait_or_enter(1)
 
 # Turn everything off at end
 clear_strip()
