@@ -36,7 +36,7 @@ def turn_off(strip_obj):
 
 # === COLOR DEFINITIONS ===
 # NOTE: WS2812B uses GRB order (Green, Red, Blue), NOT RGB!
-GREEN = Color(255, 0, 0)      # For Compost
+GREEN = Color(0, 255, 0)      # For Compost
 BLUE = Color(0, 0, 255)       # For Recycling  
 WHITE = Color(100, 100, 100)  # For Trash (gray/white)
 OFF = Color(0, 0, 0)
