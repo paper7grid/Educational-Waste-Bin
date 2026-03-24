@@ -16,10 +16,10 @@ LED_DMA = 10
 LED_INVERT = False
 
 # GPIO pins
-LED_PINS = [24] #13]     # Compost, Recycling, Trash
+LED_PINS = [18, 21] #19]  #18, 20,   # Compost, Recycling, Trash
 
 # Colors (GRB format!)
-GREEN = Color(255, 0, 0)    # Compost
+GREEN = Color(0, 255, 0)    # Compost
 BLUE = Color(0, 0, 255)     # Recycling
 GRAY = Color(50, 50, 50)    # Trash
 OFF = Color(0, 0, 0)
