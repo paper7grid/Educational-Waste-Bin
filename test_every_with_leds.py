@@ -3,7 +3,7 @@
 
 import cv2
 import numpy as np
-import tensorflow as tf
+from ai_edge_litert.interpreter import Interpreter
 from PIL import Image
 import time
 from picamera2 import Picamera2
@@ -64,7 +64,7 @@ def get_bin_category(label):
 
 # === LOAD MODEL ===
 print("\n[TEST 1] Loading AI model...")
-interpreter = tf.lite.Interpreter(model_path='model_unquant.tflite')
+interpreter = Interpreter(model_path='model_unquant.tflite')
 interpreter.allocate_tensors()
 print("✓ Model loaded!")
 
