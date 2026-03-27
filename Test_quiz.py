@@ -55,15 +55,23 @@ def light_up_bin(category):
 
 # === WASTE CATEGORY MAPPING ===
 def get_bin_category(label):
-    label_lower = label.lower()
-    if 'banana' in label_lower or 'orange peel' in label_lower:
+    label_lower = label.strip().lower()
+
+    COMPOST_EXACT = ['orange peels', 'banana', 'used fiber bowl']
+
+    RECYCLE_EXACT = ['cardboard', 'paper', 'paper bag', 'glass bottle',
+                     'glass jar', 'milk carton', 'water bottle', 'soda can']
+
+    if label_lower in COMPOST_EXACT:
         return "COMPOST", (72, 200, 72)
-    elif 'paperplate' in label_lower or 'paper plate' in label_lower:
-        return "TRASH", (110, 110, 230)
-    elif 'cardboard' in label_lower:
+
+    if label_lower in RECYCLE_EXACT:
         return "RECYCLE", (60, 200, 220)
-    else:
-        return "UNKNOWN", (160, 160, 160)
+
+    # Trash: Used Paper Plate, Used Paper Tray, Used Paper Bowl, Used Tissue,
+    # Aluminium Tray, Bubble Wrap, Paper Cup, Plastic Bag, Plastic Container,
+    # Plastic Spoon, Plastic Fork, Plastic Wrapper, Ziploc Bag
+    return "TRASH", (110, 110, 230)
 
 # === UI HELPERS ===
 FONT = cv2.FONT_HERSHEY_SIMPLEX
@@ -131,13 +139,17 @@ def draw_bin_card(frame, label, key, x, y, w, h, color):
 
 # === LOAD MODEL ===
 print("\n[1] Loading AI model...")
-interpreter = Interpreter(model_path='model_unquant2.tflite')
+interpreter = Interpreter(model_path='model_unquant.tflite')
 interpreter.allocate_tensors()
 print("✓ Model loaded!")
 
 print("\n[2] Loading labels...")
 with open('labels3.txt', 'r') as f:
-    labels = [line.strip() for line in f.readlines()]
+    labels = []
+    for line in f.readlines():
+        parts = line.strip().split(' ', 1)   # split on first space only
+        label = parts[1] if len(parts) > 1 else parts[0]
+        labels.append(label.strip())
 print(f"✓ Labels: {labels}")
 
 print("\n[3] Starting camera...")
@@ -292,7 +304,7 @@ try:
         cv2.imshow("Smart Bin", frame)
         key = cv2.waitKey(1) & 0xFF
 
-        if key == 27:
+        if key == 27:  # Escape
             break
         elif key == ord(' '):
             if state == IDLE:
@@ -312,7 +324,7 @@ try:
                 print(f"Guess: {user_guess}  |  AI: {final_bin_category}")
                 if user_guess == final_bin_category:
                     quiz_result_msg   = "You got it!"
-                    quiz_sub_msg      = f"It is {final_bin_category.capitalize()}, nice one!"
+                    quiz_sub_msg      = f"It is {final_bin_category.capitalize()}  —  nice one!"
                     quiz_result_color = ACCENT_GRN
                 else:
                     quiz_result_msg   = "Not quite!"
