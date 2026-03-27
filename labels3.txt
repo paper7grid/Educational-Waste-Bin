@@ -1,0 +1,24 @@
+0 Used Paper Plate
+1 Used Paper Tray
+2 Orange Peels
+3 Banana
+4 Used Fiber Bowl
+5 Used Paper Bowl
+6 Used Tissue
+7 Aluminium Tray
+8 Bubble Wrap
+9 Cardboard
+10 Glass Bottle
+11 Glass Jar
+12 Milk Carton
+13 Paper
+14 Paper Bag
+15 Paper Cup
+16 Plastic Bag
+17 Plastic Container
+18 Water Bottle
+19 Plastic Spoon
+20 Plastic Fork 
+21 Plastic Wrapper
+22 Soda Can
+23 Ziploc Bag
