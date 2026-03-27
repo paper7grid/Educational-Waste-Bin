@@ -8,6 +8,7 @@ import time
 from picamera2 import Picamera2
 from collections import defaultdict
 from rpi_ws281x import PixelStrip, Color
+from gpiozero import Button
 
 print("="*50)
 print("SMART BIN — STARTING UP")
@@ -20,6 +21,16 @@ LED_BRIGHTNESS = 190
 
 strip = PixelStrip(LED_COUNT, LED_PIN, brightness=LED_BRIGHTNESS)
 strip.begin()
+
+# === BUTTON SETUP ===
+button = Button(2, bounce_time=0.1)
+button_pressed = False
+
+def on_button_press():
+    global button_pressed
+    button_pressed = True
+
+button.when_pressed = on_button_press
 
 LED_GREEN = Color(0, 255, 0)
 LED_BLUE  = Color(0, 0, 255)
