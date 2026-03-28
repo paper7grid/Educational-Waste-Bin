@@ -1,0 +1,3 @@
+0 Compost
+1 Recycle
+2 Trash

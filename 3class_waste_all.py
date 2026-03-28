@@ -23,7 +23,7 @@ strip = PixelStrip(LED_COUNT, LED_PIN, brightness=LED_BRIGHTNESS)
 strip.begin()
 
 # === BUTTON SETUP ===
-button = Button(4, bounce_time=0.1)
+button = Button(2, bounce_time=0.1)
 button_pressed = False
 
 def on_button_press():
@@ -66,24 +66,29 @@ def light_up_bin(category):
 
 # === WASTE CATEGORY MAPPING ===
 def get_bin_category(label):
-    label_lower = label.strip().lower()
+    if label is None:
+        print("⚠️ label is None")
+        return "TRASH", (110, 110, 230)
 
-    COMPOST_EXACT = ['orange peels', 'banana', 'used fiber bowl']
+    # Convert to lowercase and remove numbers and extra spaces
+    label_lower = label.lower().strip()
+    # If label has a number prefix, remove it
+    parts = label_lower.split()
+    if len(parts) > 1 and parts[0].isdigit():
+        label_lower = " ".join(parts[1:])
 
-    RECYCLE_EXACT = ['cardboard', 'paper', 'paper bag', 'glass bottle',
-                     'glass jar', 'milk carton', 'water bottle', 'soda can']
+    print(f"[DEBUG] Label processed for bin: '{label_lower}'")
 
-    if label_lower in COMPOST_EXACT:
+    if "compost" in label_lower:
         return "COMPOST", (72, 200, 72)
-
-    if label_lower in RECYCLE_EXACT:
+    elif "recycle" in label_lower:
         return "RECYCLE", (60, 200, 220)
+    elif "trash" in label_lower:
+        return "TRASH", (110, 110, 230)
 
-    # Trash: Used Paper Plate, Used Paper Tray, Used Paper Bowl, Used Tissue,
-    # Aluminium Tray, Bubble Wrap, Paper Cup, Plastic Bag, Plastic Container,
-    # Plastic Spoon, Plastic Fork, Plastic Wrapper, Ziploc Bag
+    # fallback
+    print(f"⚠️ Unknown label '{label_lower}' → defaulting to TRASH")
     return "TRASH", (110, 110, 230)
-
 # === UI HELPERS ===
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 
@@ -150,12 +155,12 @@ def draw_bin_card(frame, label, key, x, y, w, h, color):
 
 # === LOAD MODEL ===
 print("\n[1] Loading AI model...")
-interpreter = Interpreter(model_path='model_unquant2.tflite')
+interpreter = Interpreter(model_path='model_unquant4.tflite')
 interpreter.allocate_tensors()
 print("✓ Model loaded!")
 
 print("\n[2] Loading labels...")
-with open('labels3.txt', 'r') as f:
+with open('labels4.txt', 'r') as f:
     labels = []
     for line in f.readlines():
         parts = line.strip().split(' ', 1)   # split on first space only
