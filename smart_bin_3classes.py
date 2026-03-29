@@ -46,9 +46,9 @@ def show_png(canvas, key):
 # ───────────────────────────────────────────────
 #  TEXT POSITION CONSTANTS  ← tweak these
 # ───────────────────────────────────────────────
-CORRECT_TEXT_Y = 480   # ← Y of "Recycle: 99%" on correct.png
+CORRECT_TEXT_Y = 230 # ← Y of "Recycle: 99%" on correct.png
 WRONG_LABEL_Y  = 460   # ← Y of "It is actually" on wrong.png
-WRONG_ITEM_Y   = 510   # ← Y of item + % on wrong.png
+WRONG_ITEM_Y   = 590   # ← Y of item + % on wrong.png
 
 # ───────────────────────────────────────────────
 #  DESIGN TOKENS  (BGR)
@@ -77,7 +77,7 @@ ZONES   = {"COMPOST":(0,60), "RECYCLE":(60,120), "TRASH":(120,180)}
 LCOLORS = {
     "COMPOST": Color(0,210,70),
     "RECYCLE": Color(44,148,215),
-    "TRASH":   Color(210,210,210),
+    "TRASH": Color(255, 0, 0),
 }
 led_off_at = 0.0
 
@@ -332,18 +332,18 @@ def cam_off():
 # ───────────────────────────────────────────────
 #  STATE MACHINE
 # ───────────────────────────────────────────────
-SLEEP, IDLE, COUNTDOWN, SCAN, QUIZ, RESULT = 0, 1, 2, 3, 4, 5
+SLEEP, COUNTDOWN, SCAN, QUIZ, RESULT = 0, 2, 3, 4, 5
 
 state      = SLEEP
 last_act   = time.time()
 SLEEP_AFTER = 600
 
-COUNTDOWN_DUR   = 3.0
+COUNTDOWN_DUR   = 5.0
 countdown_start = 0.0
 scan_start      = 0.0
 SCAN_DUR        = 5.0
 res_at          = 0.0
-RES_DUR         = 10.0
+RES_DUR         = 8.0
 
 predictions = []
 conf_accum  = defaultdict(float)
@@ -381,7 +381,9 @@ try:
             show_png(canvas, "sleep")
             cv2.imshow("Smart Bin", canvas)
             if flags["any"] or key==ord(' '):
-                clr(); cam_on(); last_act=now; state=IDLE
+                clr(); cam_on(); last_act=now
+                countdown_start=now; state=COUNTDOWN
+                print("→ Countdown...")
             continue
 
         # ── camera capture (needed by all states below) ──
@@ -390,28 +392,9 @@ try:
         frame_n += 1
 
         # ═══════════════════════════════════════
-        #  IDLE  —  camera + reticle + prompt
-        # ═══════════════════════════════════════
-        if state == IDLE:
-            canvas = (canvas.astype(np.float32)*0.45).astype(np.uint8)
-            canvas[:80,:] = (canvas[:80].astype(np.float32)*0.25).astype(np.uint8)
-            cv2.rectangle(canvas,(0,0),(W,80),(15,22,15),-1)
-            putc(canvas,"SMART BIN",56,2.0,C_GREEN,3,FB)
-            draw_reticle(canvas, W//2, H//2+20, 145, C_GREEN, now)
-            L1="Hold item up to camera"; L2="then press any button to scan"
-            cw2=max(tsz(L1,1.15,2)[0],tsz(L2,0.85,2)[0])+56; ch2=108
-            cx2=(W-cw2)//2; cy2=H-190
-            panel_box(canvas,cx2,cy2,cw2,ch2,r=16)
-            put(canvas,L1,cx2+28,cy2+48,1.15,C_WHITE,2)
-            put(canvas,L2,cx2+28,cy2+88,0.85,C_DIM,2)
-            if flags["any"] or key==ord(' '):
-                clr(); last_act=now; countdown_start=now; state=COUNTDOWN
-                print("→ Countdown...")
-
-        # ═══════════════════════════════════════
         #  COUNTDOWN  —  3  2  1 on camera
         # ═══════════════════════════════════════
-        elif state == COUNTDOWN:
+        if state == COUNTDOWN:
             last_act   = now
             elapsed_cd = now - countdown_start
             remaining  = COUNTDOWN_DUR - elapsed_cd
