@@ -17,57 +17,53 @@ from gpiozero import Button
 W, H = 1280, 720
 
 # ───────────────────────────────────────────────
-#  BACKGROUND IMAGES  (swap in your Canva JPGs)
-#  Keys: "sleep", "quiz", "result"
-#  Put the files next to smart_bin.py and rename
-#  them to match, e.g. bg_sleep.jpg
+#  PNG BACKGROUNDS  — place next to smart_bin.py
 # ───────────────────────────────────────────────
-_BG_FILES = {
-    "sleep":  "bg_sleep.jpg",
-    "quiz":   "bg_quiz.jpg",
-    "result": "bg_result.jpg",
+_PNG = {
+    "sleep":   "scene1.png",
+    "quiz":    "quiz.png",
+    "correct": "correct.png",
+    "wrong":   "wrong.png",
 }
 
-def _load_bg(key):
-    """Load a background image resized to W×H, or return None."""
-    path = _BG_FILES.get(key, "")
-    img  = cv2.imread(path)
+def _load_png(key):
+    img = cv2.imread(_PNG[key], cv2.IMREAD_UNCHANGED)
     if img is None:
         return None
+    if img.ndim == 3 and img.shape[2] == 4:
+        img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
     return cv2.resize(img, (W, H), interpolation=cv2.INTER_LINEAR)
 
-# Load once at startup — returns None if file not found (shows solid black)
-BG = {k: _load_bg(k) for k in _BG_FILES}
+PNG = {k: _load_png(k) for k in _PNG}
 
-def apply_bg(canvas, key, darken=0.0):
-    """
-    Write background image into canvas.
-    darken: 0.0 = original, 1.0 = fully black  (for overlay readability)
-    Falls back to solid C_BG if no image found.
-    """
-    img = BG.get(key)
+def show_png(canvas, key):
+    img = PNG.get(key)
     if img is not None:
         np.copyto(canvas, img)
-        if darken > 0.0:
-            canvas[:] = (canvas.astype(np.float32) * (1.0 - darken)).astype(np.uint8)
     else:
-        canvas[:] = C_BG   # placeholder: solid dark colour
+        canvas[:] = C_BG
 
 # ───────────────────────────────────────────────
-#  DESIGN TOKENS  (all colours in BGR)
+#  TEXT POSITION CONSTANTS  ← tweak these
 # ───────────────────────────────────────────────
-C_BG        = ( 10,  12,  10)
-C_WHITE     = (235, 238, 235)
-C_DIM       = (105, 110, 105)
-C_PANEL     = ( 18,  24,  18)
-C_BORDER    = ( 48,  58,  48)
+CORRECT_TEXT_Y = 480   # ← Y of "Recycle: 99%" on correct.png
+WRONG_LABEL_Y  = 460   # ← Y of "It is actually" on wrong.png
+WRONG_ITEM_Y   = 510   # ← Y of item + % on wrong.png
 
-C_GREEN     = ( 72, 200,  82)   # compost
-C_BLUE      = (215, 148,  44)   # recycle  (BGR of rgb 44,148,215)
-C_GREY      = (200, 200, 200)   # trash
+# ───────────────────────────────────────────────
+#  DESIGN TOKENS  (BGR)
+# ───────────────────────────────────────────────
+C_BG     = ( 10,  12,  10)
+C_WHITE  = (235, 238, 235)
+C_DIM    = (105, 110, 105)
+C_PANEL  = ( 18,  24,  18)
+C_BORDER = ( 48,  58,  48)
+C_GREEN  = ( 72, 200,  82)
+C_BLUE   = (215, 148,  44)
+C_GREY   = (200, 200, 200)
 
-BIN_COL  = {"COMPOST": C_GREEN, "RECYCLE": C_BLUE, "TRASH": C_GREY}
-BIN_LABEL= {"COMPOST": "Compost","RECYCLE": "Recycle","TRASH": "Trash"}
+BIN_COL   = {"COMPOST": C_GREEN, "RECYCLE": C_BLUE, "TRASH": C_GREY}
+BIN_LABEL = {"COMPOST": "Compost", "RECYCLE": "Recycle", "TRASH": "Trash"}
 
 F  = cv2.FONT_HERSHEY_SIMPLEX
 FB = cv2.FONT_HERSHEY_DUPLEX
@@ -77,7 +73,7 @@ FB = cv2.FONT_HERSHEY_DUPLEX
 # ───────────────────────────────────────────────
 strip = PixelStrip(180, 18, brightness=200)
 strip.begin()
-ZONES   = {"COMPOST":(0,60),"RECYCLE":(60,120),"TRASH":(120,180)}
+ZONES   = {"COMPOST":(0,60), "RECYCLE":(60,120), "TRASH":(120,180)}
 LCOLORS = {
     "COMPOST": Color(0,210,70),
     "RECYCLE": Color(44,148,215),
@@ -104,8 +100,8 @@ B_COMPOST = Button(2, bounce_time=0.1)
 B_RECYCLE = Button(3, bounce_time=0.1)
 B_TRASH   = Button(4, bounce_time=0.1)
 
-flags      = {"any":False,"c":False,"r":False,"t":False}
-press_time = {"c":-99.0,"r":-99.0,"t":-99.0}
+flags      = {"any":False, "c":False, "r":False, "t":False}
+press_time = {"c":-99.0, "r":-99.0, "t":-99.0}
 
 def on_c(): flags["c"]=flags["any"]=True; press_time["c"]=time.time()
 def on_r(): flags["r"]=flags["any"]=True; press_time["r"]=time.time()
@@ -118,7 +114,7 @@ B_TRASH.when_pressed   = on_t
 def clr(): flags.update({"any":False,"c":False,"r":False,"t":False})
 
 # ───────────────────────────────────────────────
-#  BIN MAPPING  (3-class)
+#  BIN MAPPING
 # ───────────────────────────────────────────────
 def get_bin(label):
     l = label.strip().lower()
@@ -129,22 +125,18 @@ def get_bin(label):
 # ───────────────────────────────────────────────
 #  DRAWING HELPERS
 # ───────────────────────────────────────────────
-
 def tsz(txt, scale, thick=2, font=F):
     return cv2.getTextSize(txt, font, scale, thick)[0]
 
 def put(canvas, txt, x, y, scale, col, thick=2, font=F):
-    """Crisp text — hard outline then fill, no sub-pixel blur."""
     cv2.putText(canvas, txt, (x, y), font, scale, (0,0,0), thick+3, cv2.LINE_8)
     cv2.putText(canvas, txt, (x, y), font, scale, col,     thick,   cv2.LINE_8)
 
 def putc(canvas, txt, y, scale, col, thick=2, font=F):
-    """Horizontally centred crisp text."""
     w2 = tsz(txt, scale, thick, font)[0]
     put(canvas, txt, (W-w2)//2, y, scale, col, thick, font)
 
 def rr(canvas, x, y, w2, h2, col, r=16, t=-1):
-    """Rounded rectangle."""
     r = min(r, w2//2, h2//2)
     cv2.rectangle(canvas,(x+r,y),(x+w2-r,y+h2), col, t)
     cv2.rectangle(canvas,(x,y+r),(x+w2,y+h2-r), col, t)
@@ -152,7 +144,6 @@ def rr(canvas, x, y, w2, h2, col, r=16, t=-1):
         cv2.circle(canvas,(px,py),r,col,t)
 
 def panel_box(canvas, x, y, w2, h2, r=18, alpha=0.85):
-    """Dark semi-transparent panel with border."""
     ov = canvas.copy()
     rr(ov, x, y, w2, h2, C_PANEL, r=r)
     cv2.addWeighted(ov, alpha, canvas, 1.0-alpha, 0, canvas)
@@ -164,12 +155,21 @@ def pbar(canvas, elapsed, total, x, y, bw, bh, col):
     rr(canvas, x, y, fill, bh, col, r=bh//2)
 
 def to_bgr(raw):
-    if raw.ndim==3 and raw.shape[2]==4:
-        return np.ascontiguousarray(raw[:,:,1:4])
-    return cv2.cvtColor(raw, cv2.COLOR_RGB2BGR)
+    # Picamera2 RGB888 → BGR for OpenCV display
+    frame = raw[:, :, :3] if raw.ndim == 3 and raw.shape[2] == 4 else raw
+    return cv2.cvtColor(np.ascontiguousarray(frame), cv2.COLOR_RGB2BGR)
+
+# ── FLIP CONTROL — change FLIP_CODE if image is still mirrored/upside-down:
+#   1  = horizontal mirror (left↔right)   ← start here
+#   0  = vertical flip (upside-down)
+#  -1  = both axes
+#  None = no flip
+FLIP_CODE = 1
 
 def cam_frame(raw):
     bgr = to_bgr(raw)
+    if FLIP_CODE is not None:
+        bgr = cv2.flip(bgr, FLIP_CODE)
     ch, cw = bgr.shape[:2]
     s = max(W/cw, H/ch)
     nw, nh = int(cw*s), int(ch*s)
@@ -178,124 +178,44 @@ def cam_frame(raw):
     return np.ascontiguousarray(big[y0:y0+H, x0:x0+W])
 
 # ───────────────────────────────────────────────
-#  VIGNETTE  (pre-computed once)
-# ───────────────────────────────────────────────
-def _make_vignette(strength=0.82):
-    X  = np.linspace(-1, 1, W, dtype=np.float32)
-    Y  = np.linspace(-1, 1, H, dtype=np.float32)
-    xx, yy = np.meshgrid(X, Y)
-    d  = np.sqrt(xx**2 + yy**2)
-    m  = np.clip(1.0 - d * strength, 0.0, 1.0)
-    return m[:, :, np.newaxis]          # shape (H, W, 1)
-
-_VIGN = _make_vignette()
-
-def apply_vignette(canvas):
-    """In-place dark radial vignette."""
-    canvas[:] = np.clip(canvas.astype(np.float32) * _VIGN, 0, 255).astype(np.uint8)
-
-# ───────────────────────────────────────────────
 #  SCAN RETICLE
 # ───────────────────────────────────────────────
 def draw_reticle(canvas, cx, cy, size, col, t_now):
-    """Corner-bracket viewfinder + crosshair + slow scan line."""
-    arm = size // 3
-    thk = 3
-
+    arm = size // 3; thk = 3
     for sx, sy in [(-1,-1),(1,-1),(-1,1),(1,1)]:
-        bx = cx + sx * size
-        by = cy + sy * size
-        cv2.line(canvas,(bx,by),(bx - sx*arm, by),    col, thk, cv2.LINE_AA)
-        cv2.line(canvas,(bx,by),(bx, by - sy*arm),    col, thk, cv2.LINE_AA)
-
+        bx = cx + sx * size; by = cy + sy * size
+        cv2.line(canvas,(bx,by),(bx - sx*arm, by), col, thk, cv2.LINE_AA)
+        cv2.line(canvas,(bx,by),(bx, by - sy*arm), col, thk, cv2.LINE_AA)
     gap = 14
-    cv2.line(canvas,(cx-size+arm, cy),(cx-gap, cy), col, 1, cv2.LINE_AA)
-    cv2.line(canvas,(cx+gap, cy),(cx+size-arm, cy), col, 1, cv2.LINE_AA)
-    cv2.line(canvas,(cx, cy-size+arm),(cx, cy-gap), col, 1, cv2.LINE_AA)
-    cv2.line(canvas,(cx, cy+gap),(cx, cy+size-arm), col, 1, cv2.LINE_AA)
-
-    cv2.circle(canvas,(cx,cy), 4, col, -1, cv2.LINE_AA)
-
+    cv2.line(canvas,(cx-size+arm,cy),(cx-gap,cy), col,1,cv2.LINE_AA)
+    cv2.line(canvas,(cx+gap,cy),(cx+size-arm,cy), col,1,cv2.LINE_AA)
+    cv2.line(canvas,(cx,cy-size+arm),(cx,cy-gap), col,1,cv2.LINE_AA)
+    cv2.line(canvas,(cx,cy+gap),(cx,cy+size-arm), col,1,cv2.LINE_AA)
+    cv2.circle(canvas,(cx,cy),4,col,-1,cv2.LINE_AA)
     sweep = int((t_now % 2.5) / 2.5 * (2*size)) - size
     sy2 = cy + sweep
     if cy - size < sy2 < cy + size:
-        cv2.line(canvas,(cx-size, sy2),(cx+size, sy2), col, 1, cv2.LINE_AA)
-
-# ───────────────────────────────────────────────
-#  AESTHETIC SCAN HELPERS  (new)
-# ───────────────────────────────────────────────
-
-def draw_ring_progress(canvas, cx, cy, r, progress, col, bg_col=(35,45,35), thick=5):
-    """Thin arc progress ring — background track + coloured fill."""
-    cv2.ellipse(canvas, (cx, cy), (r, r), -90, 0, 360, bg_col, thick, cv2.LINE_AA)
-    if progress > 0.01:
-        end_angle = int(360 * min(progress, 1.0))
-        cv2.ellipse(canvas, (cx, cy), (r, r), -90, 0, end_angle, col, thick, cv2.LINE_AA)
-        # leading dot
-        a = math.radians(-90 + end_angle)
-        dx = cx + int(r * math.cos(a))
-        dy = cy + int(r * math.sin(a))
-        cv2.circle(canvas, (dx, dy), thick - 1, col, -1, cv2.LINE_AA)
-
-def draw_pulse_ring(canvas, cx, cy, base_r, col, t_now, speed=2.2):
-    """Animated expanding + fading ring (radar pulse)."""
-    phase = (t_now * speed) % 1.0
-    r     = int(base_r + phase * 80)
-    alpha = 1.0 - phase
-    overlay = canvas.copy()
-    thickness = max(1, int(3 * alpha))
-    faded = tuple(int(c * alpha * 0.7) for c in col)
-    cv2.circle(overlay, (cx, cy), r, faded, thickness, cv2.LINE_AA)
-    cv2.addWeighted(overlay, 0.55, canvas, 0.45, 0, canvas)
-
-def draw_corner_deco(canvas, x, y, w2, h2, col, arm=22, thick=2):
-    """Four corner L-brackets around a rectangle."""
-    pts = [(x,y),(x+w2,y),(x,y+h2),(x+w2,y+h2)]
-    signs= [(1,1),(-1,1),(1,-1),(-1,-1)]
-    for (px,py),(sx,sy) in zip(pts,signs):
-        cv2.line(canvas,(px,py),(px+sx*arm,py),col,thick,cv2.LINE_AA)
-        cv2.line(canvas,(px,py),(px,py+sy*arm),col,thick,cv2.LINE_AA)
-
-def draw_scan_readout(canvas, x, y, lines, col_label=C_DIM, col_val=C_GREEN):
-    """Monospace-style label: value pairs stacked vertically."""
-    lh = 28
-    for i, (lbl, val) in enumerate(lines):
-        ty = y + i * lh
-        put(canvas, lbl, x, ty, 0.58, col_label, 1)
-        vw = tsz(val, 0.58, 1)[0]
-        put(canvas, val, x + 130, ty, 0.58, col_val, 1)
-
-def _scan_bar_h(canvas, y, h2, alpha=0.55):
-    """Horizontal frosted dark stripe."""
-    ov = canvas.copy()
-    cv2.rectangle(ov,(0,y),(W,y+h2),(8,14,8),-1)
-    cv2.addWeighted(ov, alpha, canvas, 1-alpha, 0, canvas)
+        cv2.line(canvas,(cx-size,sy2),(cx+size,sy2),col,1,cv2.LINE_AA)
 
 # ───────────────────────────────────────────────
 #  QUIZ CIRCLE BUTTON
 # ───────────────────────────────────────────────
 def quiz_circle(canvas, cx, cy, rad, col, cat, label, pt):
     age = time.time() - pt
-    r = int(rad * (1.0 - 0.15 * math.sin(age/0.3*math.pi))) \
-        if 0 < age < 0.3 else rad
-
+    r = int(rad*(1.0 - 0.15*math.sin(age/0.3*math.pi))) if 0 < age < 0.3 else rad
     dark = tuple(max(0, c//5) for c in col)
-    cv2.circle(canvas,(cx,cy), r, dark, -1, cv2.LINE_AA)
-    cv2.circle(canvas,(cx,cy), r, col,  5,  cv2.LINE_AA)
-    hl = tuple(min(255, int(c*1.5)) for c in col)
-    cv2.ellipse(canvas,(cx-r//6,cy-r//6),(r//4,r//5),
-                310, 0, 120, hl, 3, cv2.LINE_AA)
-
+    cv2.circle(canvas,(cx,cy),r,dark,-1,cv2.LINE_AA)
+    cv2.circle(canvas,(cx,cy),r,col,5,cv2.LINE_AA)
+    hl = tuple(min(255,int(c*1.5)) for c in col)
+    cv2.ellipse(canvas,(cx-r//6,cy-r//6),(r//4,r//5),310,0,120,hl,3,cv2.LINE_AA)
     _icon(canvas, cx, cy - r//10, int(r*0.42), cat, col)
-
-    lbl_w = tsz(label, 1.1, 2, FB)[0]
-    put(canvas, label, cx - lbl_w//2, cy + r + 46, 1.1, col, 2, FB)
-
+    lbl_w = tsz(label,1.1,2,FB)[0]
+    put(canvas, label, cx-lbl_w//2, cy+r+46, 1.1, col, 2, FB)
     if 0 < age < 0.22:
         alpha = 1.0 - age/0.22
         flash = canvas.copy()
-        cv2.circle(flash,(cx,cy), r, tuple(min(255,int(c*0.7)) for c in col),-1,cv2.LINE_AA)
-        cv2.addWeighted(flash, alpha*0.30, canvas, 1-alpha*0.30, 0, canvas)
+        cv2.circle(flash,(cx,cy),r,tuple(min(255,int(c*0.7)) for c in col),-1,cv2.LINE_AA)
+        cv2.addWeighted(flash,alpha*0.30,canvas,1-alpha*0.30,0,canvas)
 
 def _icon(canvas, cx, cy, s, cat, col):
     hl = tuple(min(255, int(c*1.5)) for c in col)
@@ -305,8 +225,8 @@ def _icon(canvas, cx, cy, s, cat, col):
         cv2.line(canvas,(cx-s//3,cy+s//5),(cx+s//5,cy-s//2),vein,3,cv2.LINE_AA)
         cv2.line(canvas,(cx+s//5,cy+s//5),(cx-s//8,cy+s//2),hl,4,cv2.LINE_AA)
     elif cat == "RECYCLE":
-        for a_deg in [90, 210, 330]:
-            a1 = math.radians(a_deg); a2 = math.radians(a_deg+120)
+        for a_deg in [90,210,330]:
+            a1=math.radians(a_deg); a2=math.radians(a_deg+120)
             p1=(cx+int(s*.55*math.cos(a1)),cy-int(s*.55*math.sin(a1)))
             p2=(cx+int(s*.55*math.cos(a2)),cy-int(s*.55*math.sin(a2)))
             cv2.line(canvas,p1,p2,hl,4,cv2.LINE_AA)
@@ -315,33 +235,14 @@ def _icon(canvas, cx, cy, s, cat, col):
                 he=a2+math.pi+da
                 cv2.line(canvas,p2,(p2[0]+int(ha*math.cos(he)),p2[1]-int(ha*math.sin(he))),hl,4,cv2.LINE_AA)
     else:
-        tw=int(s*.7); th=int(s*.75)
-        tx=cx-tw//2; ty=cy-th//2
+        tw=int(s*.7); th=int(s*.75); tx=cx-tw//2; ty=cy-th//2
         body=np.array([[tx+tw//8,ty],[tx+tw-tw//8,ty],[tx+tw,ty+th],[tx,ty+th]],np.int32)
         cv2.fillConvexPoly(canvas,body,hl)
         cv2.rectangle(canvas,(tx-tw//9,ty-th//8),(tx+tw+tw//9,ty+th//12),hl,-1)
         cv2.rectangle(canvas,(cx-tw//5,ty-th*5//16),(cx+tw//5,ty-th//10),hl,-1)
         stripe=tuple(max(0,c//4) for c in col)
-        for lx in [tx+tw//4, cx, tx+3*tw//4]:
+        for lx in [tx+tw//4,cx,tx+3*tw//4]:
             cv2.line(canvas,(lx,ty+th//6),(lx,ty+th-th//10),stripe,3,cv2.LINE_AA)
-
-# ───────────────────────────────────────────────
-#  FACE
-# ───────────────────────────────────────────────
-def draw_face(canvas, cx, cy, r, happy):
-    col = C_GREEN if happy else (110,130,230)
-    dark= tuple(max(0,c//5) for c in col)
-    hl  = tuple(min(255,c+80) for c in col)
-    cv2.circle(canvas,(cx,cy),r,dark,-1,cv2.LINE_AA)
-    cv2.circle(canvas,(cx,cy),r,col, 4, cv2.LINE_AA)
-    ex=r//3
-    for ox in [-ex,ex]:
-        cv2.circle(canvas,(cx+ox,cy-r//6),r//8,col,-1,cv2.LINE_AA)
-        cv2.circle(canvas,(cx+ox-r//18,cy-r//6-r//16),r//14,hl,-1,cv2.LINE_AA)
-    if happy:
-        cv2.ellipse(canvas,(cx,cy+r//10),(r//2,r//3),0,15,165,col,4,cv2.LINE_AA)
-    else:
-        cv2.ellipse(canvas,(cx,cy+r//2),(r//2,r//3),0,195,345,col,4,cv2.LINE_AA)
 
 # ───────────────────────────────────────────────
 #  MODEL + LABELS
@@ -397,19 +298,24 @@ def cam_off():
             print(f"    cam_off warning: {e}")
         finally:
             camera = None
-            time.sleep(0.5)   # let the kernel fully release the device
+            time.sleep(0.5)
         print("    Camera off.")
 
 # ───────────────────────────────────────────────
 #  STATE MACHINE
 # ───────────────────────────────────────────────
-SLEEP,IDLE,SCAN,QUIZ,RESULT = 0,1,2,3,4
+SLEEP, IDLE, COUNTDOWN, SCAN, QUIZ, RESULT = 0, 1, 2, 3, 4, 5
+
 state      = SLEEP
 last_act   = time.time()
-SLEEP_AFTER= 600
+SLEEP_AFTER = 600
 
-scan_start = 0.0; SCAN_DUR = 5.0
-res_at     = 0.0; RES_DUR  = 10.0
+COUNTDOWN_DUR   = 3.0
+countdown_start = 0.0
+scan_start      = 0.0
+SCAN_DUR        = 5.0
+res_at          = 0.0
+RES_DUR         = 10.0
 
 predictions = []
 conf_accum  = defaultdict(float)
@@ -417,11 +323,10 @@ count_accum = defaultdict(int)
 frame_n     = 0
 CONF_THRESH = 35.0
 
-f_label=f_cat=""
-f_conf =0.0
-r_msg=r_sub=""
-r_happy  =True
-raw_last =None
+f_label = f_cat = ""
+f_conf  = 0.0
+r_happy = True
+raw_last = None
 
 # ───────────────────────────────────────────────
 #  WINDOW
@@ -441,99 +346,100 @@ try:
             cam_off(); led_clear(); clr(); state=SLEEP; continue
 
         # ═══════════════════════════════════════
-        #  SLEEP
+        #  SLEEP  — scene1.png fullscreen
         # ═══════════════════════════════════════
         if state == SLEEP:
             canvas = np.zeros((H,W,3), np.uint8)
-            apply_bg(canvas, "sleep", darken=0.0)   # your Canva JPG or black
-
-            # Fallback text (shown on top of whatever bg_sleep.jpg has)
-            if BG["sleep"] is None:
-                putc(canvas, "SMART BIN",      H//2 - 52, 4.5, C_WHITE, 6, FB)
-                putc(canvas, "Learn where your waste belongs",
-                             H//2 + 28, 1.1, C_DIM, 2)
-                btn_w, btn_h = 440, 68
-                bx = (W-btn_w)//2; by = H//2 + 82
-                rr(canvas, bx, by, btn_w, btn_h, C_GREEN, r=34)
-                btxt = "PRESS ANY BUTTON"
-                bw2  = tsz(btxt, 1.1, 2)[0]
-                put(canvas, btxt, (W-bw2)//2, by+47, 1.1, C_BG, 2)
-
+            show_png(canvas, "sleep")
             cv2.imshow("Smart Bin", canvas)
             if flags["any"] or key==ord(' '):
                 clr(); cam_on(); last_act=now; state=IDLE
             continue
 
-        # ── capture ─────────────────────────────
+        # ── camera capture (needed by all states below) ──
         raw_last = camera.capture_array()
         canvas   = cam_frame(raw_last)
         frame_n += 1
 
         # ═══════════════════════════════════════
-        #  IDLE  —  camera + reticle
+        #  IDLE  —  camera + reticle + prompt
         # ═══════════════════════════════════════
         if state == IDLE:
             canvas = (canvas.astype(np.float32)*0.45).astype(np.uint8)
-
             canvas[:80,:] = (canvas[:80].astype(np.float32)*0.25).astype(np.uint8)
             cv2.rectangle(canvas,(0,0),(W,80),(15,22,15),-1)
-            putc(canvas,"SMART BIN", 56, 2.0, C_GREEN, 3, FB)
-
+            putc(canvas,"SMART BIN",56,2.0,C_GREEN,3,FB)
             draw_reticle(canvas, W//2, H//2+20, 145, C_GREEN, now)
-
-            L1 = "Hold item up to camera"
-            L2 = "then press any button to scan"
-            w1 = tsz(L1, 1.15, 2)[0]
-            w2_ = tsz(L2, 0.85, 2)[0]
-            cw2 = max(w1, w2_) + 56
-            ch2 = 108
-            cx2 = (W-cw2)//2; cy2 = H-190
-            panel_box(canvas, cx2, cy2, cw2, ch2, r=16)
-            put(canvas, L1, cx2+28, cy2+48,  1.15, C_WHITE, 2)
-            put(canvas, L2, cx2+28, cy2+88,  0.85, C_DIM,   2)
-
+            L1="Hold item up to camera"; L2="then press any button to scan"
+            cw2=max(tsz(L1,1.15,2)[0],tsz(L2,0.85,2)[0])+56; ch2=108
+            cx2=(W-cw2)//2; cy2=H-190
+            panel_box(canvas,cx2,cy2,cw2,ch2,r=16)
+            put(canvas,L1,cx2+28,cy2+48,1.15,C_WHITE,2)
+            put(canvas,L2,cx2+28,cy2+88,0.85,C_DIM,2)
             if flags["any"] or key==ord(' '):
-                clr(); last_act=now
+                clr(); last_act=now; countdown_start=now; state=COUNTDOWN
+                print("→ Countdown...")
+
+        # ═══════════════════════════════════════
+        #  COUNTDOWN  —  3  2  1 on camera
+        # ═══════════════════════════════════════
+        elif state == COUNTDOWN:
+            last_act   = now
+            elapsed_cd = now - countdown_start
+            remaining  = COUNTDOWN_DUR - elapsed_cd
+
+            canvas = (canvas.astype(np.float32)*0.55).astype(np.uint8)
+            draw_reticle(canvas, W//2, H//2, 200, C_GREEN, now)
+
+            digit = str(max(1, math.ceil(remaining)))
+            frac  = remaining - math.floor(remaining)
+            scale = 7.0 + 1.5 * (frac ** 0.3)
+            dw, dh = tsz(digit, scale, 6, FB)
+            cv2.putText(canvas, digit,
+                        ((W-dw)//2+4, H//2+dh//2+4),
+                        FB, scale, (0,0,0), 10, cv2.LINE_AA)
+            cv2.putText(canvas, digit,
+                        ((W-dw)//2, H//2+dh//2),
+                        FB, scale, C_GREEN, 6, cv2.LINE_AA)
+            putc(canvas,"Get ready to scan!", H-60, 1.0, C_WHITE, 2, FB)
+
+            if elapsed_cd >= COUNTDOWN_DUR:
                 predictions=[]; conf_accum=defaultdict(float)
                 count_accum=defaultdict(int); frame_n=0
                 scan_start=now; state=SCAN
                 print("→ Scanning...")
 
         # ═══════════════════════════════════════
-        #  SCAN  —  clean minimal scan screen
+        #  SCAN  —  camera + reticle + progress
         # ═══════════════════════════════════════
         elif state == SCAN:
             elapsed  = now - scan_start
             last_act = now
             progress = min(elapsed / SCAN_DUR, 1.0)
 
-            # slight dim so camera is clear but not washed out
-            canvas = (canvas.astype(np.float32) * 0.72).astype(np.uint8)
+            canvas = (canvas.astype(np.float32)*0.72).astype(np.uint8)
+            draw_reticle(canvas, W//2, H//2-20, 200, C_GREEN, now)
 
-            # ── corner bracket reticle (has scan line built in) ──
-            draw_reticle(canvas, W//2, H//2 - 20, 200, C_GREEN, now)
-
-            # ── bottom: floating progress bar + labels, no box ──
             pct     = int(progress * 100)
-            pb_x    = 64; pb_y = H - 38; pb_w = W - 128; pb_h = 10
-            put(canvas, "ANALYZING", pb_x, pb_y - 14, 0.80, C_GREEN, 2, FB)
-            pct_str = f"{pct}%"
-            pw = tsz(pct_str, 0.80, 2, FB)[0]
-            put(canvas, pct_str, pb_x + pb_w - pw, pb_y - 14, 0.80, C_WHITE, 2, FB)
-            pbar(canvas, elapsed, SCAN_DUR, pb_x, pb_y, pb_w, pb_h, C_GREEN)
+            pb_x=64; pb_y=H-38; pb_w=W-128; pb_h=10
+            put(canvas,"ANALYZING",pb_x,pb_y-14,0.80,C_GREEN,2,FB)
+            pct_str=f"{pct}%"
+            pw=tsz(pct_str,0.80,2,FB)[0]
+            put(canvas,pct_str,pb_x+pb_w-pw,pb_y-14,0.80,C_WHITE,2,FB)
+            pbar(canvas,elapsed,SCAN_DUR,pb_x,pb_y,pb_w,pb_h,C_GREEN)
 
-            # ── inference ────────────────────────────────────
             if frame_n % 10 == 0:
-                img = cv2.resize(to_bgr(raw_last),(224,224))
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                # raw_last is RGB888 — resize and feed directly, no colour conversion needed
+                rgb = raw_last[:, :, :3] if raw_last.shape[2] == 4 else raw_last
+                img = cv2.resize(rgb, (224,224))
                 img = np.expand_dims(img.astype(np.float32)/255.0, 0)
-                interp.set_tensor(inp_d[0]["index"], img)
+                interp.set_tensor(inp_d[0]["index"],img)
                 interp.invoke()
-                preds = interp.get_tensor(out_d[0]["index"])[0]
-                idx   = int(np.argmax(preds)); conf = float(preds[idx])*100
-                top3  = np.argsort(preds)[::-1][:min(3,len(labels))]
+                preds=interp.get_tensor(out_d[0]["index"])[0]
+                idx=int(np.argmax(preds)); conf=float(preds[idx])*100
+                top3=np.argsort(preds)[::-1][:min(3,len(labels))]
                 print("  "+"  |  ".join(f"{labels[i]} {preds[i]*100:.1f}%" for i in top3))
-                if conf >= CONF_THRESH:
+                if conf>=CONF_THRESH:
                     predictions.append((idx,conf))
                     conf_accum[idx]+=conf; count_accum[idx]+=1
                 else:
@@ -547,103 +453,62 @@ try:
                     p2=interp.get_tensor(out_d[0]["index"])[0]
                     best=int(np.argmax(p2)); f_conf=float(p2[best])*100
                 f_label=labels[best]; f_cat=get_bin(f_label)
-                print(f"\n→ '{f_label}' → {f_cat} ({f_conf:.1f}%)\n")
+                print(f"\n-> '{f_label}' -> {f_cat} ({f_conf:.1f}%)\n")
                 state=QUIZ
 
         # ═══════════════════════════════════════
-        #  QUIZ  —  solid dark bg, 3 circles
+        #  QUIZ  —  quiz.png fullscreen
         # ═══════════════════════════════════════
         elif state == QUIZ:
             last_act = now
             canvas = np.zeros((H,W,3), np.uint8)
-            apply_bg(canvas, "quiz", darken=0.55)   # your Canva JPG or black
+            show_png(canvas, "quiz")
 
-            putc(canvas,"Where does it go?", 96, 2.6, C_WHITE, 4, FB)
-
-            chip = f"{f_label}   {f_conf:.0f}% confident"
-            cw3  = tsz(chip, 0.9, 2)[0] + 50
-            cx3  = (W-cw3)//2
-            panel_box(canvas, cx3, 118, cw3, 48, r=24)
-            put(canvas, chip, cx3+25, 150, 0.9, C_DIM, 2)
-
-            rad  = 132; gap  = 72
-            tot  = 3*2*rad + 2*gap
-            bx0  = (W-tot)//2 + rad
-            by0  = H//2 + 52
-
-            quiz_circle(canvas, bx0,              by0, rad, C_GREEN,  "COMPOST", "Compost", press_time["c"])
-            quiz_circle(canvas, bx0+2*rad+gap,    by0, rad, C_BLUE,   "RECYCLE", "Recycle", press_time["r"])
-            quiz_circle(canvas, bx0+2*(2*rad+gap),by0, rad, C_GREY,   "TRASH",   "Trash",   press_time["t"])
-
-            putc(canvas,"Press the matching coloured button", H-34, 0.88, C_DIM, 2)
-
-            guess=None
+            guess = None
             if   flags["c"] or key==ord('c'): guess="COMPOST"
             elif flags["r"] or key==ord('r'): guess="RECYCLE"
             elif flags["t"] or key==ord('t'): guess="TRASH"
 
             if guess:
                 clr(); last_act=now
-                print(f"  Guess:{guess}  Correct:{f_cat}")
-                if guess==f_cat:
-                    r_msg="Amazing! You got it!"; r_sub=f"It goes in {BIN_LABEL[f_cat]}!"; r_happy=True
-                else:
-                    r_msg="Good try!"; r_sub=f"It actually goes in {BIN_LABEL[f_cat]}"; r_happy=False
+                r_happy = (guess == f_cat)
+                print(f"  Guess:{guess}  Correct:{f_cat}  -> {'CORRECT' if r_happy else 'WRONG'}")
                 led_show(f_cat); res_at=now; state=RESULT
 
         # ═══════════════════════════════════════
-        #  RESULT
+        #  RESULT  —  correct.png or wrong.png
         # ═══════════════════════════════════════
         elif state == RESULT:
             last_act  = now
             elapsed_r = now - res_at
-            col_r     = BIN_COL[f_cat]
-
             canvas = np.zeros((H,W,3), np.uint8)
-            apply_bg(canvas, "result", darken=0.60)  # your Canva JPG or black
 
-            # Fallback: tinted solid bg when no image loaded
-            if BG["result"] is None:
-                tint = tuple(max(0,c//9) for c in col_r)
-                canvas[:] = tint
+            if r_happy:
+                show_png(canvas, "correct")
+                # "Recycle: 99%" centred — move CORRECT_TEXT_Y to reposition
+                item_str = f"{BIN_LABEL[f_cat]}: {f_conf:.0f}%"
+                putc(canvas, item_str, CORRECT_TEXT_Y, 1.8, C_WHITE, 3, FB)
 
-            cv2.rectangle(canvas,(0,0),(W,8),col_r,-1)
-            cv2.rectangle(canvas,(0,H-8),(W,H),col_r,-1)
+            else:
+                show_png(canvas, "wrong")
+                # "It is actually"  — move WRONG_LABEL_Y to reposition
+                putc(canvas, "It is actually", WRONG_LABEL_Y, 1.1, C_WHITE, 2, FB)
+                # "Recycle  99%"    — move WRONG_ITEM_Y to reposition
+                item_str = f"{BIN_LABEL[f_cat]}  {f_conf:.0f}%"
+                putc(canvas, item_str, WRONG_ITEM_Y, 1.8, C_WHITE, 3, FB)
 
-            draw_face(canvas, W//2, 188, 92, r_happy)
+            # thin countdown bar at very bottom
+            bar_col = C_GREEN if r_happy else C_GREY
+            pbar(canvas, elapsed_r, RES_DUR, (W-700)//2, H-20, 700, 10, bar_col)
 
-            crd_w=1000; crd_h=195
-            crd_x=(W-crd_w)//2; crd_y=318
-            panel_box(canvas, crd_x, crd_y, crd_w, crd_h, r=24)
-            rr(canvas, crd_x, crd_y, 10, crd_h, col_r, r=5)
-
-            msg_col=(90,235,105) if r_happy else (115,150,255)
-            putc(canvas, r_msg, crd_y+90,  2.2, msg_col, 3, FB)
-            putc(canvas, r_sub, crd_y+148, 1.1, C_WHITE, 2)
-
-            badge = BIN_LABEL[f_cat].upper()
-            bw2   = tsz(badge, 1.8, 3, FB)[0] + 60
-            bh2   = 66
-            bx2   = (W-bw2)//2; by2 = crd_y+crd_h+20
-            rr(canvas, bx2, by2, bw2, bh2, col_r, r=33)
-            dark_txt = tuple(max(0,c//4) for c in col_r)
-            putc(canvas, badge, by2+50, 1.8, dark_txt, 3, FB)
-
-            info = f"{f_label}  —  {f_conf:.0f}% confidence"
-            putc(canvas, info, by2+bh2+34, 0.85, C_DIM, 1)
-
-            pbar(canvas, elapsed_r, RES_DUR, (W-700)//2, H-52, 700, 16, col_r)
-            putc(canvas,"Returning to start...", H-18, 0.72, C_DIM, 1)
-
-            # ── after countdown → SLEEP (camera off, LEDs off) ──
             if elapsed_r >= RES_DUR:
                 led_clear(); cam_off(); clr(); state=SLEEP
 
         # LED auto-off
-        if led_off_at and now>led_off_at: led_clear(); led_off_at=0.0
+        if led_off_at and now > led_off_at: led_clear(); led_off_at=0.0
 
         cv2.imshow("Smart Bin", canvas)
-        cv2.setWindowProperty("Smart Bin",cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
+        cv2.setWindowProperty("Smart Bin", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         clr()
 
 except KeyboardInterrupt:
