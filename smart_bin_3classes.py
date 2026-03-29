@@ -154,10 +154,20 @@ def pbar(canvas, elapsed, total, x, y, bw, bh, col):
     fill = max(4, int(bw * min(elapsed/total, 1.0)))
     rr(canvas, x, y, fill, bh, col, r=bh//2)
 
+# ── COLOUR DEBUG — set to True once, look at the 4 quadrants, then set False ──
+COLOUR_DEBUG = False
+DISPLAY_CONV = "NONE"
+
 def to_bgr(raw):
-    # Picamera2 RGB888 → BGR for OpenCV display
-    frame = raw[:, :, :3] if raw.ndim == 3 and raw.shape[2] == 4 else raw
-    return cv2.cvtColor(np.ascontiguousarray(frame), cv2.COLOR_RGB2BGR)
+    frame = np.ascontiguousarray(raw[:, :, :3] if raw.shape[2] == 4 else raw)
+    if DISPLAY_CONV == "RGB2BGR":
+        return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+    elif DISPLAY_CONV == "BGR2RGB":
+        return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    elif DISPLAY_CONV == "YUV2BGR":
+        return cv2.cvtColor(frame, cv2.COLOR_YUV2BGR_YUYV)
+    else:  # NONE — raw passthrough
+        return frame
 
 # ── FLIP CONTROL — change FLIP_CODE if image is still mirrored/upside-down:
 #   1  = horizontal mirror (left↔right)   ← start here
@@ -175,7 +185,25 @@ def cam_frame(raw):
     nw, nh = int(cw*s), int(ch*s)
     big = cv2.resize(bgr,(nw,nh),interpolation=cv2.INTER_LINEAR)
     x0, y0 = (nw-W)//2, (nh-H)//2
-    return np.ascontiguousarray(big[y0:y0+H, x0:x0+W])
+    out = np.ascontiguousarray(big[y0:y0+H, x0:x0+W])
+
+    if COLOUR_DEBUG:
+        # Show 4 small conversion options so you can pick the correct one
+        raw3 = np.ascontiguousarray(raw[:, :, :3] if raw.shape[2] == 4 else raw)
+        options = [
+            ("NONE",      raw3),
+            ("RGB2BGR",   cv2.cvtColor(raw3, cv2.COLOR_RGB2BGR)),
+            ("BGR2RGB",   cv2.cvtColor(raw3, cv2.COLOR_BGR2RGB)),
+            ("FLIP_CHAN", raw3[:, :, ::-1]),
+        ]
+        tw, th = W//4, H//4
+        for i, (label, img) in enumerate(options):
+            thumb = cv2.resize(img, (tw, th))
+            x = i * tw
+            out[0:th, x:x+tw] = thumb
+            cv2.putText(out, label, (x+6, th-10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,0), 2)
+    return out
 
 # ───────────────────────────────────────────────
 #  SCAN RETICLE
@@ -429,8 +457,9 @@ try:
             pbar(canvas,elapsed,SCAN_DUR,pb_x,pb_y,pb_w,pb_h,C_GREEN)
 
             if frame_n % 10 == 0:
-                # raw_last is RGB888 — resize and feed directly, no colour conversion needed
-                rgb = raw_last[:, :, :3] if raw_last.shape[2] == 4 else raw_last
+                # raw_last is BGR (confirmed) — convert to RGB for the model
+                frame3 = raw_last[:, :, :3] if raw_last.shape[2] == 4 else raw_last
+                rgb = cv2.cvtColor(np.ascontiguousarray(frame3), cv2.COLOR_BGR2RGB)
                 img = cv2.resize(rgb, (224,224))
                 img = np.expand_dims(img.astype(np.float32)/255.0, 0)
                 interp.set_tensor(inp_d[0]["index"],img)
